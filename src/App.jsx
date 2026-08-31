@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Activity, CircuitBoard, Cloud, Code2, Droplets, Fan, Gauge, Leaf, RefreshCw, Smartphone, Thermometer, Wifi, Zap } from "lucide-react";
+import { Activity, CircuitBoard, Cloud, Code2, Droplets, Gauge, Leaf, RefreshCw, Smartphone, Thermometer, Wifi, Zap } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 const RANGE_CONFIG = {
@@ -157,27 +157,77 @@ function DataSection({ kind, data, range, setRange }) {
   );
 }
 
-const systemItems = [
-  { label: "AUTO", value: "", icon: RefreshCw, tone: "orange" },
-  { label: "Fan 1", value: "OFF", icon: Fan },
-  { label: "Fan 2", value: "OFF", icon: Fan },
-  { label: "Pump", value: "ON", icon: Droplets, tone: "green" },
-  { label: "Relay 4", value: "OFF", icon: Zap },
-  { label: "ESP32", value: "ONLINE", icon: CircuitBoard, tone: "orange" },
-  { label: "Wi-Fi/Data", value: "CONNECTED", icon: Wifi, tone: "green" },
-  { label: "Controller", value: "v2.2.0", icon: Code2 },
-  { label: "Device", value: "MushCycle-ESP32", icon: Smartphone },
-];
+async function sendControlCommand(target, value) {
+  const baseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+  if (!baseUrl) return { demo: true };
+
+  const response = await fetch(`${baseUrl}/api/v1/control`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ target, value }),
+  });
+
+  if (!response.ok) throw new Error(`Control API returned HTTP ${response.status}`);
+  return response.json().catch(() => ({}));
+}
 
 function SystemRail() {
+  const [controls, setControls] = useState({ auto: true, pump: false, relay4: false });
+  const [pending, setPending] = useState(null);
+  const [error, setError] = useState("");
+
+  async function toggle(target) {
+    const nextValue = !controls[target];
+    setPending(target);
+    setError("");
+    try {
+      await sendControlCommand(target, nextValue);
+      setControls((current) => ({ ...current, [target]: nextValue }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Control command failed");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  const items = [
+    { key: "auto", label: "AUTO", value: controls.auto ? "ON" : "OFF", icon: RefreshCw, interactive: true },
+    { key: "pump", label: "Pump", value: controls.pump ? "ON" : "OFF", icon: Droplets, interactive: true },
+    { key: "relay4", label: "Relay 4", value: controls.relay4 ? "ON" : "OFF", icon: Zap, interactive: true },
+    { key: "esp32", label: "ESP32", value: "ONLINE", icon: CircuitBoard },
+    { key: "wifi", label: "Wi-Fi/Data", value: "CONNECTED", icon: Wifi },
+    { key: "controller", label: "Controller", value: "v2.4.0", icon: Code2 },
+    { key: "device", label: "Device", value: "MushCycle-ESP32", icon: Smartphone },
+  ];
+
   return (
-    <footer className="system-rail" aria-label="Read-only auto control and system status">
-      {systemItems.map(({ label, value, icon: Icon, tone }) => (
-        <div className={`system-item ${tone || ""}`} key={label}>
-          <Icon aria-hidden="true" />
-          <span>{label}<strong className={value === "ON" || value === "ONLINE" || value === "CONNECTED" ? "dot-number" : ""}>{value}</strong></span>
-        </div>
-      ))}
+    <footer className="system-area" aria-label="Control and system status">
+      <div className="system-rail">
+        {items.map(({ key, label, value, icon: Icon, interactive }) => {
+          const isOn = value === "ON" || value === "ONLINE" || value === "CONNECTED";
+          const content = (
+            <>
+              <Icon aria-hidden="true" />
+              <span>{label}<strong className={isOn ? "dot-number" : ""}>{pending === key ? "SENDING…" : value}</strong></span>
+            </>
+          );
+          return interactive ? (
+            <button
+              className={`system-item control-item ${isOn ? "active" : ""}`}
+              key={key}
+              type="button"
+              aria-pressed={Boolean(controls[key])}
+              disabled={pending !== null}
+              onClick={() => toggle(key)}
+            >
+              {content}
+            </button>
+          ) : (
+            <div className={`system-item ${isOn ? "active" : ""}`} key={key}>{content}</div>
+          );
+        })}
+      </div>
+      {error && <div className="control-error" role="alert">{error}</div>}
     </footer>
   );
 }
