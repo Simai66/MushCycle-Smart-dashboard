@@ -57,14 +57,21 @@ button { font: inherit; }
 .stat-row dt { font-size: 10px; color: #555; margin-bottom: 8px; }
 .stat-row dd { margin: 0; font-size: clamp(15px, 1.65vw, 22px); color: #333; white-space: nowrap; }
 .stat-row .accent-value { color: var(--sensor-color); }
-.system-rail { display: grid; grid-template-columns: repeat(9, minmax(100px, 1fr)); min-height: 92px; align-items: center; padding: 10px 20px; }
-.system-item { min-height: 62px; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 8px 14px; border-right: 1px solid var(--border); }
-.system-item:last-child { border: 0; }
+.system-area { background: #fff; }
+.system-rail { display: grid; grid-template-columns: repeat(7, minmax(120px, 1fr)); align-items: stretch; padding: 0 20px; border-top: 1px solid var(--border); }
+.system-item { min-height: 86px; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 10px 14px; border: 0; border-right: 1px solid var(--border); background: #fff; color: #111; text-align: left; }
+.system-item:last-child { border-right: 0; }
 .system-item svg { width: 28px; height: 28px; stroke-width: 1.7; flex: 0 0 auto; }
 .system-item span { font-size: 12px; white-space: nowrap; }
 .system-item strong { display: block; font-size: 14px; font-weight: 400; margin-top: 4px; }
-.system-item.orange { color: #ff3d16; }
-.system-item.green strong { color: #238532; }
+.system-item.active svg, .system-item.active strong { color: #238532; }
+.control-item { cursor: pointer; transition: background .16s, transform .16s; }
+.control-item:hover { background: #f7f7f5; }
+.control-item:active { transform: scale(.98); background: #f1f1ee; }
+.control-item:focus-visible { outline: 3px solid #b9d6ff; outline-offset: -3px; }
+.control-item[aria-pressed="true"] { background: #f1f8f2; }
+.control-item:disabled { cursor: wait; opacity: .7; }
+.control-error { border-top: 1px solid #f2c7bf; background: #fff4f2; color: #a41e12; padding: 10px 20px; text-align: center; font-size: 13px; }
 .offline-banner { padding: 12px 30px; background: #fff4f2; color: #a41e12; display: flex; gap: 20px; justify-content: center; border-bottom: 1px solid #f2c7bf; }
 .state-message { min-height: calc(100vh - 89px); display: grid; place-items: center; align-content: center; gap: 12px; text-align: center; padding: 32px; }
 .state-message svg { width: 48px; height: 48px; color: #ff3d16; }
@@ -107,7 +114,7 @@ button { font: inherit; }
   .summary-value { font-size: 58px; margin: 14px 0; }
   .stat-row dd { font-size: 18px; }
   .system-rail { grid-template-columns: repeat(2, 1fr); padding: 0 14px; }
-  .system-item { justify-content: flex-start; }
+  .system-item { justify-content: flex-start; min-height: 92px; }
   .offline-banner { flex-direction: column; gap: 3px; font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
