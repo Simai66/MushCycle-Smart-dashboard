@@ -2,7 +2,10 @@ const DEFAULT_TIMEOUT_MS = 8000;
 
 function assertReading(item) {
   if (!item || typeof item !== "object") return false;
-  return ["temperature", "humidity", "mq2", "mq9"].every((key) => Number.isFinite(Number(item[key])));
+  const timestamp = item.timestamp || item.created_at || item.time;
+  return ["temperature", "humidity", "mq2", "mq9"].every((key) => Number.isFinite(Number(item[key])))
+    && timestamp
+    && Number.isFinite(new Date(timestamp).getTime());
 }
 
 function normalizeReading(item) {
@@ -15,14 +18,20 @@ function normalizeReading(item) {
     humidity: Number(item.humidity),
     mq2: Number(item.mq2),
     mq9: Number(item.mq9),
+    mode: item.mode === "MANUAL" ? "MANUAL" : "AUTO",
+    pump: Boolean(item.pump),
+    relay4: Boolean(item.relay4),
+    version: item.version || "unknown",
   };
 }
 
+function apiBaseUrl() {
+  const configured = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+  return configured || window.location.origin;
+}
+
 export async function fetchLiveReadings(range = "24H") {
-  const baseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
-  if (!baseUrl) {
-    throw new Error("VITE_API_BASE_URL is not configured");
-  }
+  const baseUrl = apiBaseUrl();
 
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
@@ -42,6 +51,7 @@ export async function fetchLiveReadings(range = "24H") {
     if (!Array.isArray(rows)) {
       throw new Error("Live API payload must be an array or { readings: [] }");
     }
+    if (!rows.length) return [];
 
     const normalized = rows.filter(assertReading).map(normalizeReading);
     if (!normalized.length) {

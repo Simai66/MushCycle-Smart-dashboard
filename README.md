@@ -2,27 +2,30 @@
 
 React + Vite dashboard for the MushCycle Smart prototype.
 
-## Demo mode
+## Live system
 
-The production prototype currently runs with demo data so it can be used for presentation without the physical ESP32 being online.
+Data path:
 
-```env
-VITE_USE_DEMO_DATA=true
-VITE_API_BASE_URL=
+```text
+ESP32 -> Supabase Edge API -> Database -> Dashboard
+Dashboard -> Supabase Edge API -> ESP32 polling -> Pump / Relay 4
 ```
 
-The committed `.env.production` enables this mode.
-
-## Live-data foundation
-
-When the backend is ready, set:
+Supabase project `MushCycle Smart` runs in Singapore. Schema lives at [`supabase/schema.sql`](supabase/schema.sql); API source lives at [`supabase/functions/mushcycle-api`](supabase/functions/mushcycle-api).
 
 ```env
 VITE_USE_DEMO_DATA=false
-VITE_API_BASE_URL=https://your-api.example.com
+VITE_API_BASE_URL=https://smzlporzdrhrlhwxopph.supabase.co/functions/v1/mushcycle-api
 ```
 
-A live-data adapter is prepared in `src/liveData.js`. The planned API contract is:
+Edge API uses custom Device Key and Control PIN authentication. Database stores SHA-256 hashes only. Local plaintext values stay in Git-ignored files:
+
+- `firmware/secrets.h` — Wi-Fi and Device Key
+- `.local/mushcycle-control.txt` — Dashboard Control PIN
+
+Set Wi-Fi values in `firmware/secrets.h`, then upload [`firmware/MushCycle_Smart_v2.5.0_Live.ino`](firmware/MushCycle_Smart_v2.5.0_Live.ino). Never commit `secrets.h`. Firmware validates HTTPS with GTS Root R1, posts telemetry every 10 seconds, and checks for commands every 2 seconds.
+
+Dashboard reads:
 
 `GET /api/v1/readings?range=24H`
 
@@ -42,9 +45,19 @@ Accepted response:
 }
 ```
 
-Required numeric fields are `temperature`, `humidity`, `mq2`, and `mq9`. `timestamp` should be ISO-8601. The adapter includes an 8-second timeout, HTTP error handling, payload validation, and value normalization.
+ESP32 writes:
 
-The current UI still intentionally uses the existing demo data path while `VITE_USE_DEMO_DATA=true`. Before switching the production flag to false, connect `fetchLiveReadings()` from `src/liveData.js` to the dashboard state and verify the final backend endpoint/field names.
+`POST /api/v1/readings` with header `X-Device-Key`.
+
+Dashboard controls:
+
+`POST /api/v1/control` with header `X-Control-Pin`. UI asks for this PIN on first control use and keeps it only for the browser tab session. Pump and Relay 4 commands require MANUAL mode; switch AUTO off first.
+
+ESP32 reads:
+
+`GET /api/v1/control?format=csv` with header `X-Device-Key`.
+
+Production config uses live mode. Push to `main` to trigger linked Vercel deployment.
 
 ## Development
 
@@ -57,5 +70,5 @@ npm run dev
 
 ```bash
 npm run build
-npm run test:sites
+npm test
 ```

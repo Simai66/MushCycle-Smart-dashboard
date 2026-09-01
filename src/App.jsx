@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Activity, CircuitBoard, Cloud, Code2, Droplets, Gauge, Leaf, RefreshCw, Smartphone, Thermometer, Wifi, Zap } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { fetchLiveReadings } from "./liveData.js";
 
 const RANGE_CONFIG = {
   "1H": { points: 13, step: 5 },
@@ -51,8 +52,8 @@ function stats(data, key) {
   };
 }
 
-function StatusPill() {
-  return <span className="online-pill"><span className="status-dot" />ONLINE</span>;
+function StatusPill({ online }) {
+  return <span className={online ? "online-pill" : "offline-pill"}><span className="status-dot" />{online ? "ONLINE" : "OFFLINE"}</span>;
 }
 
 function Sparkline({ data, dataKey, color }) {
@@ -158,30 +159,49 @@ function DataSection({ kind, data, range, setRange }) {
 }
 
 async function sendControlCommand(target, value) {
-  const baseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
-  if (!baseUrl) return { demo: true };
+  const configured = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+  const baseUrl = configured || window.location.origin;
+  let pin = window.sessionStorage.getItem("mushcycle-control-pin");
+  if (!pin) {
+    pin = window.prompt("Control PIN");
+    if (!pin) throw new Error("Control cancelled");
+    window.sessionStorage.setItem("mushcycle-control-pin", pin);
+  }
 
   const response = await fetch(`${baseUrl}/api/v1/control`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    headers: { "Content-Type": "application/json", Accept: "application/json", "X-Control-Pin": pin },
     body: JSON.stringify({ target, value }),
   });
 
-  if (!response.ok) throw new Error(`Control API returned HTTP ${response.status}`);
+  if (!response.ok) {
+    if (response.status === 401) window.sessionStorage.removeItem("mushcycle-control-pin");
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || `Control API returned HTTP ${response.status}`);
+  }
   return response.json().catch(() => ({}));
 }
 
-function SystemRail() {
-  const [controls, setControls] = useState({ auto: true, pump: false, relay4: false });
+function SystemRail({ reading, online, demoEnabled }) {
+  const [controls, setControls] = useState({
+    auto: reading?.mode !== "MANUAL",
+    pump: Boolean(reading?.pump),
+    relay4: Boolean(reading?.relay4),
+  });
   const [pending, setPending] = useState(null);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!reading) return;
+    setControls({ auto: reading.mode !== "MANUAL", pump: reading.pump, relay4: reading.relay4 });
+  }, [reading?.timestamp]);
 
   async function toggle(target) {
     const nextValue = !controls[target];
     setPending(target);
     setError("");
     try {
-      await sendControlCommand(target, nextValue);
+      if (!demoEnabled) await sendControlCommand(target, nextValue);
       setControls((current) => ({ ...current, [target]: nextValue }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Control command failed");
@@ -194,9 +214,9 @@ function SystemRail() {
     { key: "auto", label: "AUTO", value: controls.auto ? "ON" : "OFF", icon: RefreshCw, interactive: true },
     { key: "pump", label: "Pump", value: controls.pump ? "ON" : "OFF", icon: Droplets, interactive: true },
     { key: "relay4", label: "Relay 4", value: controls.relay4 ? "ON" : "OFF", icon: Zap, interactive: true },
-    { key: "esp32", label: "ESP32", value: "ONLINE", icon: CircuitBoard },
-    { key: "wifi", label: "Wi-Fi/Data", value: "CONNECTED", icon: Wifi },
-    { key: "controller", label: "Controller", value: "v2.4.0", icon: Code2 },
+    { key: "esp32", label: "ESP32", value: online ? "ONLINE" : "OFFLINE", icon: CircuitBoard },
+    { key: "wifi", label: "Wi-Fi/Data", value: online ? "CONNECTED" : "OFFLINE", icon: Wifi },
+    { key: "controller", label: "Controller", value: reading?.version ? `v${reading.version}` : "UNKNOWN", icon: Code2 },
     { key: "device", label: "Device", value: "MushCycle-ESP32", icon: Smartphone },
   ];
 
@@ -241,28 +261,62 @@ function StateMessage({ state }) {
 
 export function App() {
   const [range, setRange] = useState("24H");
-  const data = useMemo(() => makeData(range), [range]);
+  const demoEnabled = import.meta.env.DEV || import.meta.env.VITE_USE_DEMO_DATA === "true";
+  const demoData = useMemo(() => makeData(range), [range]);
+  const [liveData, setLiveData] = useState([]);
+  const [liveState, setLiveState] = useState(demoEnabled ? "ready" : "loading");
   const queryState = new URLSearchParams(window.location.search).get("state");
   const specialState = ["loading", "empty", "error"].includes(queryState) ? queryState : null;
-  const demoEnabled = import.meta.env.DEV || import.meta.env.VITE_USE_DEMO_DATA === "true";
-  const visibleState = specialState || (!demoEnabled ? "empty" : null);
-  const offline = queryState === "offline";
+  const data = demoEnabled ? demoData : liveData;
+  const latest = data.at(-1);
+  const online = demoEnabled || Boolean(latest && Date.now() - new Date(latest.timestamp).getTime() <= 30000);
+  const visibleState = specialState || (liveState === "ready" ? null : liveState);
+  const offline = queryState === "offline" || !online;
+  const lastUpdate = latest ? new Date(latest.timestamp) : null;
+
+  useEffect(() => {
+    if (demoEnabled) return undefined;
+    let active = true;
+
+    async function load() {
+      try {
+        const readings = await fetchLiveReadings(range);
+        if (!active) return;
+        setLiveData(readings);
+        setLiveState(readings.length ? "ready" : "empty");
+      } catch {
+        if (!active) return;
+        setLiveData((current) => {
+          setLiveState(current.length ? "ready" : "error");
+          return current;
+        });
+      }
+    }
+
+    setLiveState("loading");
+    load();
+    const timer = window.setInterval(load, 5000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [demoEnabled, range]);
 
   return (
     <main className="dashboard-shell">
       <header className="topbar">
         <div className="brand"><img className="brand-mark" src="/mushcycle-mark.png" alt="" /><h1>MushCycle Smart</h1></div>
-        {offline ? <span className="offline-pill"><span className="status-dot" />OFFLINE</span> : <StatusPill />}
-        <div className="last-update"><span>Last update</span><strong className="dot-number">04.45.22</strong></div>
-        <time dateTime="2026-08-27">2026-08-27</time>
+        <StatusPill online={online} />
+        <div className="last-update"><span>Last update</span><strong className="dot-number">{lastUpdate ? lastUpdate.toLocaleTimeString("en-GB") : "--:--:--"}</strong></div>
+        <time dateTime={lastUpdate?.toISOString()}>{lastUpdate ? lastUpdate.toLocaleDateString("en-CA") : "---- -- --"}</time>
       </header>
       {visibleState ? <StateMessage state={visibleState} /> : (
         <>
-          {offline && <div className="offline-banner"><strong>DEVICE OFFLINE</strong><span>Last data received 04:45:22 · Values below are the last recorded values</span></div>}
+          {offline && <div className="offline-banner"><strong>DEVICE OFFLINE</strong><span>Showing last recorded values</span></div>}
           <ReadingStrip data={data} />
           <DataSection kind="climate" data={data} range={range} setRange={setRange} />
           <DataSection kind="gas" data={data} range={range} setRange={setRange} />
-          <SystemRail />
+          <SystemRail reading={latest} online={online} demoEnabled={demoEnabled} />
         </>
       )}
     </main>
