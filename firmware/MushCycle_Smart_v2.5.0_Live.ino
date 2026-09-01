@@ -51,24 +51,33 @@
 #include "secrets.h"
 
 #define APP_NAME    "MushCycle Smart"
-#define APP_VERSION "2.5.0"
+#define APP_VERSION "2.5.1"
 
 const char* SERVER_BASE_URL = "https://smzlporzdrhrlhwxopph.supabase.co/functions/v1/mushcycle-api";
 
-// GTS Root R4. Source: https://pki.goog/repo/certs/gtsr4.pem
-static const char GTS_ROOT_R4[] PROGMEM = R"EOF(
+// GlobalSign Root CA. Supabase chain: WE1 -> GTS Root R4 -> GlobalSign Root CA.
+// Source: https://support.globalsign.com/ca-certificates/root-certificates/globalsign-root-certificates
+static const char SUPABASE_ROOT_CA[] PROGMEM = R"EOF(
 -----BEGIN CERTIFICATE-----
-MIICCTCCAY6gAwIBAgINAgPlwGjvYxqccpBQUjAKBggqhkjOPQQDAzBHMQswCQYD
-VQQGEwJVUzEiMCAGA1UEChMZR29vZ2xlIFRydXN0IFNlcnZpY2VzIExMQzEUMBIG
-A1UEAxMLR1RTIFJvb3QgUjQwHhcNMTYwNjIyMDAwMDAwWhcNMzYwNjIyMDAwMDAw
-WjBHMQswCQYDVQQGEwJVUzEiMCAGA1UEChMZR29vZ2xlIFRydXN0IFNlcnZpY2Vz
-IExMQzEUMBIGA1UEAxMLR1RTIFJvb3QgUjQwdjAQBgcqhkjOPQIBBgUrgQQAIgNi
-AATzdHOnaItgrkO4NcWBMHtLSZ37wWHO5t5GvWvVYRg1rkDdc/eJkTBa6zzuhXyi
-QHY7qca4R9gq55KRanPpsXI5nymfopjTX15YhmUPoYRlBtHci8nHc8iMai/lxKvR
-HYqjQjBAMA4GA1UdDwEB/wQEAwIBhjAPBgNVHRMBAf8EBTADAQH/MB0GA1UdDgQW
-BBSATNbrdP9JNqPV2Py1PsVq8JQdjDAKBggqhkjOPQQDAwNpADBmAjEA6ED/g94D
-9J+uHXqnLrmvT/aDHQ4thQEd0dlq7A/Cr8deVl5c1RxYIigL9zC2L7F8AjEA8GE8
-p/SgguMh1YQdc4acLa/KNJvxn7kjNuK8YAOdgLOaVsjh4rsUecrNIdSUtUlD
+MIIDdTCCAl2gAwIBAgILBAAAAAABFUtaw5QwDQYJKoZIhvcNAQEFBQAwVzELMAkG
+A1UEBhMCQkUxGTAXBgNVBAoTEEdsb2JhbFNpZ24gbnYtc2ExEDAOBgNVBAsTB1Jv
+b3QgQ0ExGzAZBgNVBAMTEkdsb2JhbFNpZ24gUm9vdCBDQTAeFw05ODA5MDExMjAw
+MDBaFw0yODAxMjgxMjAwMDBaMFcxCzAJBgNVBAYTAkJFMRkwFwYDVQQKExBHbG9i
+YWxTaWduIG52LXNhMRAwDgYDVQQLEwdSb290IENBMRswGQYDVQQDExJHbG9iYWxT
+aWduIFJvb3QgQ0EwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDaDuaZ
+jc6j40+Kfvvxi4Mla+pIH/EqsLmVEQS98GPR4mdmzxzdzxtIK+6NiY6arymAZavp
+xy0Sy6scTHAHoT0KMM0VjU/43dSMUBUc71DuxC73/OlS8pF94G3VNTCOXkNz8kHp
+1Wrjsok6Vjk4bwY8iGlbKk3Fp1S4bInMm/k8yuX9ifUSPJJ4ltbcdG6TRGHRjcdG
+snUOhugZitVtbNV4FpWi6cgKOOvyJBNPc1STE4U6G7weNLWLBYy5d4ux2x8gkasJ
+U26Qzns3dLlwR5EiUWMWea6xrkEmCMgZK9FGqkjWZCrXgzT/LCrBbBlDSgeF59N8
+9iFo7+ryUp9/k5DPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNVHRMBAf8E
+BTADAQH/MB0GA1UdDgQWBBRge2YaRQ2XyolQL30EzTSo//z9SzANBgkqhkiG9w0B
+AQUFAAOCAQEA1nPnfE920I2/7LqivjTFKDK1fPxsnCwrvQmeU79rXqoRSLblCKOz
+yj1hTdNGCbM+w6DjY1Ub8rrvrTnhQ7k4o+YviiY776BQVvnGCv04zcQLcFGUl5gE
+38NflNUVyRRBnMRddWQVDf9VMOyGj/8N7yy5Y0b2qvzfvGn9LhJIZJrglfCm7ymP
+AbEVtQwdpf5pLGkkeB6zpxxxYu7KyJesF12KwvhHhm4qxFYxldBniYUr+WymXUad
+DKqC5JlR3XC321Y9YeRq4VzW9v493kHMB65jUr9TU/Qr6cf9tveCX4XSQRjbgbME
+HMUfpIBvFSDJ3gyICh3WZlXi/EjJKSZp4A==
 -----END CERTIFICATE-----
 )EOF";
 
@@ -485,7 +494,7 @@ void sendCloudData() {
   }
 
   WiFiClientSecure client;
-  client.setCACert(GTS_ROOT_R4);
+  client.setCACert(SUPABASE_ROOT_CA);
   HTTPClient http;
   String url = String(SERVER_BASE_URL) + "/api/v1/readings";
   if (!http.begin(client, url)) {
@@ -540,7 +549,7 @@ void fetchControlCommand() {
   if (time(nullptr) < 1700000000) return;
 
   WiFiClientSecure client;
-  client.setCACert(GTS_ROOT_R4);
+  client.setCACert(SUPABASE_ROOT_CA);
   HTTPClient http;
   String url = String(SERVER_BASE_URL) + "/api/v1/control?format=csv";
   if (!http.begin(client, url)) {
@@ -612,6 +621,7 @@ void setup() {
   Serial.println(APP_NAME);
   Serial.print("Version : ");
   Serial.println(APP_VERSION);
+  Serial.println("TLS CA  : GlobalSign Root CA");
   Serial.println("Fans removed");
   Serial.println("Fail-safe: RELAYS OFF");
   Serial.println("================================");
