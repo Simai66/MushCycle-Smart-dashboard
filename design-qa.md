@@ -44,7 +44,7 @@ The implementation preserves the source hierarchy: brand/status header, immediat
 - Mobile viewport has no horizontal overflow.
 - Browser console errors/warnings: none.
 - Production build: passed.
-- Production defaults to the no-data state; sample history is enabled only in development or with an explicit `VITE_USE_DEMO_DATA=true` build flag.
+- Production defaults to the no-data state; sample history is enabled only in development or with `?demo=1` in the URL.
 - Sites worker tests: 4 passed.
 
 ## Follow-up polish

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Activity, CircuitBoard, Cloud, Code2, Droplets, Gauge, Leaf, RefreshCw, Smartphone, Thermometer, Wifi, Zap } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { fetchLiveReadings } from "./liveData.js";
+import { apiBaseUrl, fetchLiveReadings } from "./liveData.js";
 
 const RANGE_CONFIG = {
   "1H": { points: 13, step: 5 },
@@ -159,8 +159,7 @@ function DataSection({ kind, data, range, setRange }) {
 }
 
 async function sendControlCommand(target, value) {
-  const configured = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
-  const baseUrl = configured || window.location.origin;
+  const baseUrl = apiBaseUrl();
   let pin = window.sessionStorage.getItem("mushcycle-control-pin");
   if (!pin) {
     pin = window.prompt("Control PIN");
@@ -261,7 +260,7 @@ function StateMessage({ state }) {
 
 export function App() {
   const [range, setRange] = useState("24H");
-  const demoEnabled = import.meta.env.DEV || import.meta.env.VITE_USE_DEMO_DATA === "true";
+  const demoEnabled = import.meta.env.DEV || new URLSearchParams(window.location.search).get("demo") === "1";
   const demoData = useMemo(() => makeData(range), [range]);
   const [liveData, setLiveData] = useState([]);
   const [liveState, setLiveState] = useState(demoEnabled ? "ready" : "loading");

@@ -1,4 +1,5 @@
 const DEFAULT_TIMEOUT_MS = 8000;
+const DEFAULT_API_BASE_URL = "https://smzlporzdrhrlhwxopph.supabase.co/functions/v1/mushcycle-api";
 
 function assertReading(item) {
   if (!item || typeof item !== "object") return false;
@@ -25,9 +26,8 @@ function normalizeReading(item) {
   };
 }
 
-function apiBaseUrl() {
-  const configured = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
-  return configured || window.location.origin;
+export function apiBaseUrl() {
+  return (import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/$/, "");
 }
 
 export async function fetchLiveReadings(range = "24H") {

@@ -14,7 +14,6 @@ Dashboard -> Supabase Edge API -> ESP32 polling -> Pump / Relay 4
 Supabase project `MushCycle Smart` runs in Singapore. Schema lives at [`supabase/schema.sql`](supabase/schema.sql); API source lives at [`supabase/functions/mushcycle-api`](supabase/functions/mushcycle-api).
 
 ```env
-VITE_USE_DEMO_DATA=false
 VITE_API_BASE_URL=https://smzlporzdrhrlhwxopph.supabase.co/functions/v1/mushcycle-api
 ```
 
@@ -57,7 +56,7 @@ ESP32 reads:
 
 `GET /api/v1/control?format=csv` with header `X-Device-Key`.
 
-Production config uses live mode. Push to `main` to trigger linked Vercel deployment.
+Production uses live mode. Add `?demo=1` to the dashboard URL when sample data is needed. Push to `main` to trigger linked Vercel deployment.
 
 ## Development
 
