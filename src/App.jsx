@@ -181,7 +181,7 @@ function HistoryChart({ data, type, baselines }) {
           <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#555" }} interval="preserveStartEnd" tickLine={false} axisLine={{ stroke: "#b8b8b8" }} />
           <YAxis yAxisId={0} domain={isClimate ? [24, 32] : gasReady ? ["auto", "auto"] : [0, 4095]} tick={{ fontSize: 11, fill: isClimate ? "#ff3d16" : "#238532" }} tickLine={false} axisLine={false} width={44} />
           {isClimate && <YAxis yAxisId={1} domain={[40, 80]} orientation="right" tick={{ fontSize: 11, fill: "#1769df" }} tickLine={false} axisLine={false} width={36} />}
-          <Tooltip contentStyle={{ borderRadius: 10, border: "1px solid #dedede", boxShadow: "none" }} />
+          <Tooltip formatter={(value) => Number(value).toFixed(1)} contentStyle={{ borderRadius: 10, border: "1px solid #dedede", boxShadow: "none" }} />
           <Legend iconType="plainline" align="left" verticalAlign="top" height={36} wrapperStyle={{ fontSize: 12 }} />
           {isClimate && <Area yAxisId={0} type="monotone" dataKey="temperature" name="Temperature (°C)" stroke="#ff3d16" fill="none" strokeWidth={2} isAnimationActive={false} />}
           {isClimate && <Area yAxisId={1} type="monotone" dataKey="humidity" name="Humidity (%)" stroke="#1769df" fill="none" strokeWidth={2} isAnimationActive={false} />}
