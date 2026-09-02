@@ -29,6 +29,10 @@ button { font: inherit; }
 .reading-label { font-weight: 600; color: #111; white-space: nowrap; }
 .reading-label span { color: var(--sensor-color); font-weight: 400; margin-left: 6px; font-size: 13px; }
 .reading-value { font-size: clamp(31px, 3vw, 46px); line-height: 1.05; color: #111; }
+.reading-note { margin-top: 6px; color: var(--muted); font-size: 10px; white-space: nowrap; }
+.reading-note.normal { color: #238532; }
+.reading-note.watch { color: #a66300; }
+.reading-note.high { color: #b52616; }
 .sparkline { height: 48px; min-width: 70px; }
 .data-section { padding: 22px 40px 16px; border-bottom: 1px solid var(--border); }
 .section-heading { display: grid; grid-template-columns: auto 1fr auto; gap: 22px; align-items: center; margin-bottom: 12px; }
@@ -50,7 +54,15 @@ button { font: inherit; }
 .sensor-heading { display: flex; align-items: center; gap: 10px; color: #111; font-weight: 600; }
 .sensor-heading svg { color: var(--sensor-color); width: 25px; height: 25px; stroke-width: 1.7; }
 .sensor-heading small { color: var(--sensor-color); font-weight: 400; margin-left: 6px; }
+.sensor-description { margin: 5px 0 0 35px; color: var(--muted); font-size: 12px; }
 .summary-value { color: #111; font-size: clamp(48px, 5vw, 70px); line-height: 1; margin: 18px 0 14px; }
+.gas-context { min-height: 30px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin: -7px 0 12px; color: var(--muted); font-size: 11px; }
+.gas-status { border-radius: 999px; padding: 5px 8px; background: #f0f0ed; color: #555; font-weight: 700; letter-spacing: .03em; }
+.gas-status.normal { background: #edf7ee; color: #237531; }
+.gas-status.watch { background: #fff5dd; color: #8a5700; }
+.gas-status.high { background: #fff0ed; color: #a82618; }
+.gas-context button { border: 0; border-bottom: 1px solid currentColor; padding: 2px 0; background: transparent; color: #444; cursor: pointer; font-size: 11px; }
+.gas-context button:focus-visible { outline: 3px solid #b9d6ff; outline-offset: 3px; }
 .summary-rule { height: 1px; background: var(--border); }
 .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 16px 0 0; }
 .stat-row div { min-width: 0; }

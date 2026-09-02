@@ -13,6 +13,7 @@ When implementing from a selected generated mock, treat that image as the source
 - Avoid table-heavy layouts, generic KPI card grids, fantasy visuals, and dense control-room styling.
 - Make every sensor immediately identifiable; pair medium-sized current readings with sparklines.
 - For every selected time range, show Current, Average, Minimum, and Maximum values.
+- Keep MQ-2/MQ-9 telemetry as ADC RAW in backend storage; present auto-learned relative percentage, trend status, baseline, and RAW diagnostics in dashboard.
 - The selected visual source is `exec-a6fdab56-f34f-4f5d-9ba7-4e55f4616e5d.png` (Sensor Stories).
 
 Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts/prepare-sites-build.mjs`, and `tests/sites-worker.test.mjs` intact so the same local prototype can be handed to Sites. Before a Sites handoff, run `npm run build` and `npm run test:sites`; the build must leave `dist/client/index.html`, `dist/server/index.js`, and `dist/.openai/hosting.json`.

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Activity, CircuitBoard, Cloud, Code2, Droplets, Gauge, Leaf, RefreshCw, Smartphone, Thermometer, Wifi, Zap } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { apiBaseUrl, fetchLiveReadings } from "./liveData.js";
+import { autoGasBaseline, gasStatus, relativeGasChange } from "./gasReadings.js";
 
 const RANGE_CONFIG = {
   "1H": { points: 13, step: 5 },
@@ -11,11 +12,39 @@ const RANGE_CONFIG = {
 };
 
 const SENSOR_META = [
-  { key: "temperature", label: "Temperature", unit: "°C", color: "#ff3d16", icon: Thermometer },
-  { key: "humidity", label: "Humidity", unit: "%", color: "#1769df", icon: Droplets },
-  { key: "mq2", label: "MQ-2", unit: "ADC RAW", color: "#238532", icon: Cloud },
-  { key: "mq9", label: "MQ-9", unit: "ADC RAW", color: "#2865d3", icon: Cloud },
+  { key: "temperature", metricKey: "temperature", label: "Temperature", unit: "°C", color: "#ff3d16", icon: Thermometer },
+  { key: "humidity", metricKey: "humidity", label: "Humidity", unit: "%", color: "#1769df", icon: Droplets },
+  { key: "mq2", metricKey: "mq2Relative", label: "MQ-2", description: "Smoke / flammable gas", color: "#238532", icon: Cloud },
+  { key: "mq9", metricKey: "mq9Relative", label: "MQ-9", description: "CO / methane trend", color: "#2865d3", icon: Cloud },
 ];
+
+const GAS_KEYS = ["mq2", "mq9"];
+const GAS_BASELINE_STORAGE_KEY = "mushcycle-gas-baselines";
+
+function loadGasBaselines() {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(GAS_BASELINE_STORAGE_KEY));
+    return Object.fromEntries(GAS_KEYS.map((key) => [key, Number(stored?.[key]) > 0 ? Number(stored[key]) : null]));
+  } catch {
+    return { mq2: null, mq9: null };
+  }
+}
+
+function saveGasBaselines(baselines) {
+  try {
+    window.localStorage.setItem(GAS_BASELINE_STORAGE_KEY, JSON.stringify(baselines));
+  } catch {
+    // Baseline still works for current session when browser storage is unavailable.
+  }
+}
+
+function withGasMetrics(data, baselines) {
+  return data.map((reading) => ({
+    ...reading,
+    mq2Relative: relativeGasChange(reading.mq2, baselines.mq2),
+    mq9Relative: relativeGasChange(reading.mq9, baselines.mq9),
+  }));
+}
 
 function makeData(range) {
   const { points, step } = RANGE_CONFIG[range];
@@ -43,7 +72,8 @@ function makeData(range) {
 
 function stats(data, key) {
   const values = data.map((item) => item[key]).filter(Number.isFinite);
-  const decimals = key === "temperature" || key === "humidity" ? 1 : 0;
+  if (!values.length) return { current: "--", avg: "--", min: "--", max: "--" };
+  const decimals = key === "temperature" || key === "humidity" || key.endsWith("Relative") ? 1 : 0;
   return {
     current: values.at(-1).toFixed(decimals),
     avg: (values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(decimals),
@@ -68,20 +98,29 @@ function Sparkline({ data, dataKey, color }) {
   );
 }
 
-function ReadingStrip({ data }) {
+function ReadingStrip({ data, baselines }) {
+  const latest = data.at(-1);
   return (
     <section className="reading-strip" aria-labelledby="right-now-title">
       <div className="strip-title" id="right-now-title">RIGHT NOW</div>
-      {SENSOR_META.map(({ key, label, unit, color, icon: Icon }) => (
+      {SENSOR_META.map((sensor) => {
+        const { key, metricKey, label, unit, color, icon: Icon } = sensor;
+        const gas = GAS_KEYS.includes(key);
+        const ready = !gas || Number.isFinite(baselines[key]);
+        const current = stats(data, ready ? metricKey : key).current;
+        const status = gasStatus(ready ? relativeGasChange(latest?.[key], baselines[key]) : null);
+        return (
         <article className="reading-item" key={key} style={{ "--sensor-color": color }}>
           <Icon className="reading-icon" aria-hidden="true" />
           <div className="reading-copy">
-            <div className="reading-label">{label} <span>{unit}</span></div>
-            <div className="reading-value dot-number">{stats(data, key).current}</div>
+            <div className="reading-label">{label} <span>{gas ? (ready ? "% FROM BASE" : "AUTO BASELINE") : unit}</span></div>
+            <div className="reading-value dot-number">{current}</div>
+            {gas && <div className={`reading-note ${status.tone}`}>{status.label} · RAW {latest?.[key] ?? "--"}</div>}
           </div>
-          <Sparkline data={data.slice(-10)} dataKey={key} color={color} />
+          <Sparkline data={data.slice(-10)} dataKey={ready ? metricKey : key} color={color} />
         </article>
-      ))}
+        );
+      })}
     </section>
   );
 }
@@ -96,13 +135,26 @@ function RangePicker({ range, setRange }) {
   );
 }
 
-function SensorSummary({ data, sensor }) {
-  const { key, label, unit, color, icon: Icon } = sensor;
-  const values = stats(data, key);
+function SensorSummary({ data, sensor, baselines, onRelearn }) {
+  const { key, metricKey, label, description, unit, color, icon: Icon } = sensor;
+  const gas = GAS_KEYS.includes(key);
+  const baseline = baselines[key];
+  const ready = !gas || Number.isFinite(baseline);
+  const values = stats(data, ready ? metricKey : key);
+  const rawCurrent = data.at(-1)?.[key];
+  const status = gasStatus(ready ? relativeGasChange(rawCurrent, baseline) : null);
   return (
     <article className="sensor-summary" style={{ "--sensor-color": color }}>
-      <div className="sensor-heading"><Icon aria-hidden="true" /><span>{label}</span><small>{unit}</small></div>
+      <div className="sensor-heading"><Icon aria-hidden="true" /><span>{label}</span><small>{gas ? (ready ? "% FROM BASE" : "ADC RAW") : unit}</small></div>
+      {description && <div className="sensor-description">{description}</div>}
       <div className="summary-value dot-number">{values.current}</div>
+      {gas && (
+        <div className="gas-context">
+          <span className={`gas-status ${status.tone}`}>{status.label}</span>
+          <span>RAW {rawCurrent ?? "--"} · BASE {baseline ?? "--"}</span>
+          <button type="button" onClick={() => onRelearn(key)}>Relearn baseline</button>
+        </div>
+      )}
       <div className="summary-rule" />
       <dl className="stat-row">
         {Object.entries(values).map(([name, value]) => (
@@ -113,45 +165,46 @@ function SensorSummary({ data, sensor }) {
   );
 }
 
-function HistoryChart({ data, type }) {
+function HistoryChart({ data, type, baselines }) {
   const isClimate = type === "climate";
+  const gasReady = GAS_KEYS.every((key) => Number.isFinite(baselines[key]));
   return (
-    <div className="chart-wrap" role="img" aria-label={isClimate ? "Temperature and humidity history" : "MQ-2 and MQ-9 ADC history"}>
+    <div className="chart-wrap" role="img" aria-label={isClimate ? "Temperature and humidity history" : "MQ-2 and MQ-9 relative trend history"}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 10, right: 10, left: -12, bottom: 0 }}>
           <CartesianGrid stroke="#d8d8d8" strokeDasharray="5 5" vertical />
           <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#555" }} interval="preserveStartEnd" tickLine={false} axisLine={{ stroke: "#b8b8b8" }} />
-          <YAxis yAxisId={0} domain={isClimate ? [24, 32] : [0, 2400]} tick={{ fontSize: 11, fill: isClimate ? "#ff3d16" : "#238532" }} tickLine={false} axisLine={false} width={44} />
+          <YAxis yAxisId={0} domain={isClimate ? [24, 32] : gasReady ? ["auto", "auto"] : [0, 4095]} tick={{ fontSize: 11, fill: isClimate ? "#ff3d16" : "#238532" }} tickLine={false} axisLine={false} width={44} />
           {isClimate && <YAxis yAxisId={1} domain={[40, 80]} orientation="right" tick={{ fontSize: 11, fill: "#1769df" }} tickLine={false} axisLine={false} width={36} />}
           <Tooltip contentStyle={{ borderRadius: 10, border: "1px solid #dedede", boxShadow: "none" }} />
           <Legend iconType="plainline" align="left" verticalAlign="top" height={36} wrapperStyle={{ fontSize: 12 }} />
           {isClimate && <Area yAxisId={0} type="monotone" dataKey="temperature" name="Temperature (°C)" stroke="#ff3d16" fill="none" strokeWidth={2} isAnimationActive={false} />}
           {isClimate && <Area yAxisId={1} type="monotone" dataKey="humidity" name="Humidity (%)" stroke="#1769df" fill="none" strokeWidth={2} isAnimationActive={false} />}
-          {!isClimate && <Area yAxisId={0} type="monotone" dataKey="mq2" name="MQ-2 (ADC RAW)" stroke="#238532" fill="none" strokeWidth={2} isAnimationActive={false} />}
-          {!isClimate && <Area yAxisId={0} type="monotone" dataKey="mq9" name="MQ-9 (ADC RAW)" stroke="#2865d3" fill="none" strokeWidth={2} isAnimationActive={false} />}
+          {!isClimate && <Area yAxisId={0} type="monotone" dataKey={gasReady ? "mq2Relative" : "mq2"} name={`MQ-2 (${gasReady ? "% from base" : "learning baseline"})`} stroke="#238532" fill="none" strokeWidth={2} isAnimationActive={false} />}
+          {!isClimate && <Area yAxisId={0} type="monotone" dataKey={gasReady ? "mq9Relative" : "mq9"} name={`MQ-9 (${gasReady ? "% from base" : "learning baseline"})`} stroke="#2865d3" fill="none" strokeWidth={2} isAnimationActive={false} />}
         </AreaChart>
       </ResponsiveContainer>
     </div>
   );
 }
 
-function DataSection({ kind, data, range, setRange }) {
+function DataSection({ kind, data, range, setRange, baselines, onRelearn }) {
   const climate = kind === "climate";
   const sensors = climate ? SENSOR_META.slice(0, 2) : SENSOR_META.slice(2);
   return (
     <section className="data-section">
       <div className="section-heading">
         <div className="section-mark">{climate ? <Leaf aria-hidden="true" /> : <Gauge aria-hidden="true" />}</div>
-        <div><h2>{climate ? "Climate" : "Gas sensors"}</h2><p>{climate ? "Understanding your environment." : "Tracking gas sensor activity."}</p></div>
+        <div><h2>{climate ? "Climate" : "Gas sensors"}</h2><p>{climate ? "Understanding your environment." : "Relative trend only — not ppm or a safety alarm."}</p></div>
         {climate && <RangePicker range={range} setRange={setRange} />}
       </div>
       <div className="section-body">
         <div className="chart-column">
           <h3>{climate ? "Environment History" : "Gas Sensor Trend"}</h3>
-          <HistoryChart data={data} type={kind} />
+          <HistoryChart data={data} type={kind} baselines={baselines} />
         </div>
         <div className="summary-grid">
-          {sensors.map((sensor) => <SensorSummary key={sensor.key} data={data} sensor={sensor} />)}
+          {sensors.map((sensor) => <SensorSummary key={sensor.key} data={data} sensor={sensor} baselines={baselines} onRelearn={onRelearn} />)}
         </div>
       </div>
     </section>
@@ -263,10 +316,12 @@ export function App() {
   const demoEnabled = import.meta.env.DEV || new URLSearchParams(window.location.search).get("demo") === "1";
   const demoData = useMemo(() => makeData(range), [range]);
   const [liveData, setLiveData] = useState([]);
+  const [gasBaselines, setGasBaselines] = useState(loadGasBaselines);
   const [liveState, setLiveState] = useState(demoEnabled ? "ready" : "loading");
   const queryState = new URLSearchParams(window.location.search).get("state");
   const specialState = ["loading", "empty", "error"].includes(queryState) ? queryState : null;
   const data = demoEnabled ? demoData : liveData;
+  const metricData = useMemo(() => withGasMetrics(data, gasBaselines), [data, gasBaselines]);
   const latest = data.at(-1);
   const online = demoEnabled || Boolean(latest && Date.now() - new Date(latest.timestamp).getTime() <= 30000);
   const visibleState = specialState || (liveState === "ready" ? null : liveState);
@@ -301,6 +356,27 @@ export function App() {
     };
   }, [demoEnabled, range]);
 
+  useEffect(() => {
+    if (!data.length || GAS_KEYS.every((key) => Number.isFinite(gasBaselines[key]))) return;
+    const learned = {
+      mq2: gasBaselines.mq2 ?? autoGasBaseline(data, "mq2"),
+      mq9: gasBaselines.mq9 ?? autoGasBaseline(data, "mq9"),
+    };
+    if (!Number.isFinite(learned.mq2) || !Number.isFinite(learned.mq9)) return;
+    setGasBaselines(learned);
+    saveGasBaselines(learned);
+  }, [data, gasBaselines]);
+
+  function relearnBaseline(key) {
+    const baseline = autoGasBaseline(data, key);
+    if (!Number.isFinite(baseline)) return;
+    setGasBaselines((current) => {
+      const next = { ...current, [key]: baseline };
+      saveGasBaselines(next);
+      return next;
+    });
+  }
+
   return (
     <main className="dashboard-shell">
       <header className="topbar">
@@ -312,9 +388,9 @@ export function App() {
       {visibleState ? <StateMessage state={visibleState} /> : (
         <>
           {offline && <div className="offline-banner"><strong>DEVICE OFFLINE</strong><span>Showing last recorded values</span></div>}
-          <ReadingStrip data={data} />
-          <DataSection kind="climate" data={data} range={range} setRange={setRange} />
-          <DataSection kind="gas" data={data} range={range} setRange={setRange} />
+          <ReadingStrip data={metricData} baselines={gasBaselines} />
+          <DataSection kind="climate" data={metricData} range={range} setRange={setRange} baselines={gasBaselines} onRelearn={relearnBaseline} />
+          <DataSection kind="gas" data={metricData} range={range} setRange={setRange} baselines={gasBaselines} onRelearn={relearnBaseline} />
           <SystemRail reading={latest} online={online} demoEnabled={demoEnabled} />
         </>
       )}
