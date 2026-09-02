@@ -1,4 +1,5 @@
 export const GAS_THRESHOLDS = { watch: 15, high: 30 };
+export const MIN_BASELINE_SAMPLES = 5;
 
 export function autoGasBaseline(readings, key) {
   const values = readings
@@ -6,8 +7,8 @@ export function autoGasBaseline(readings, key) {
     .filter((value) => Number.isFinite(value) && value > 0)
     .sort((a, b) => a - b);
 
-  if (values.length < 10) return null;
-  return Math.round(values[Math.floor((values.length - 1) * 0.2)]);
+  if (values.length < MIN_BASELINE_SAMPLES) return null;
+  return Math.round(values[Math.min(values.length - 1, Math.floor(values.length * 0.2))]);
 }
 
 export function relativeGasChange(raw, baseline) {

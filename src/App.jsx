@@ -73,12 +73,17 @@ function makeData(range) {
 function stats(data, key) {
   const values = data.map((item) => item[key]).filter(Number.isFinite);
   if (!values.length) return { current: "--", avg: "--", min: "--", max: "--" };
-  const decimals = key === "temperature" || key === "humidity" || key.endsWith("Relative") ? 1 : 0;
+  const relative = key.endsWith("Relative");
+  const decimals = key === "temperature" || key === "humidity" || relative ? 1 : 0;
+  const format = (value) => {
+    const formatted = value.toFixed(decimals);
+    return relative ? `${value > 0 ? "+" : ""}${formatted}%` : formatted;
+  };
   return {
-    current: values.at(-1).toFixed(decimals),
-    avg: (values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(decimals),
-    min: Math.min(...values).toFixed(decimals),
-    max: Math.max(...values).toFixed(decimals),
+    current: format(values.at(-1)),
+    avg: format(values.reduce((sum, value) => sum + value, 0) / values.length),
+    min: format(Math.min(...values)),
+    max: format(Math.max(...values)),
   };
 }
 
