@@ -3,6 +3,7 @@ import { Activity, CircuitBoard, Cloud, Code2, Droplets, Gauge, Leaf, RefreshCw,
 import { Area, AreaChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { apiBaseUrl, fetchLiveReadings } from "./liveData.js";
 import { autoGasBaseline, gasStatus, relativeGasChange } from "./gasReadings.js";
+import { normalizeControlPin } from "./controlPin.js";
 
 const RANGE_CONFIG = {
   "1H": { points: 13, step: 5 },
@@ -218,18 +219,26 @@ function DataSection({ kind, data, range, setRange, baselines, onRelearn }) {
 
 async function sendControlCommand(target, value) {
   const baseUrl = apiBaseUrl();
-  let pin = window.sessionStorage.getItem("mushcycle-control-pin");
+  let pin = normalizeControlPin(window.sessionStorage.getItem("mushcycle-control-pin"));
   if (!pin) {
-    pin = window.prompt("Control PIN");
-    if (!pin) throw new Error("Control cancelled");
-    window.sessionStorage.setItem("mushcycle-control-pin", pin);
+    const input = window.prompt("Control PIN — paste PIN or entire control file");
+    if (input === null) throw new Error("Control cancelled");
+    pin = normalizeControlPin(input);
+    if (!pin) throw new Error("Invalid Control PIN");
   }
+  window.sessionStorage.setItem("mushcycle-control-pin", pin);
 
-  const response = await fetch(`${baseUrl}/api/v1/control`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json", "X-Control-Pin": pin },
-    body: JSON.stringify({ target, value }),
-  });
+  let response;
+  try {
+    response = await fetch(`${baseUrl}/api/v1/control`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json", "X-Control-Pin": pin },
+      body: JSON.stringify({ target, value }),
+    });
+  } catch (error) {
+    window.sessionStorage.removeItem("mushcycle-control-pin");
+    throw error;
+  }
 
   if (!response.ok) {
     if (response.status === 401) window.sessionStorage.removeItem("mushcycle-control-pin");
