@@ -3,7 +3,7 @@ import { Activity, CircuitBoard, Cloud, Code2, Droplets, Gauge, Leaf, RefreshCw,
 import { Area, AreaChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { apiBaseUrl, fetchLiveReadings } from "./liveData.js";
 import { autoGasBaseline, gasStatus, relativeGasChange } from "./gasReadings.js";
-import { normalizeControlPin } from "./controlPin.js";
+import { controlCommands, normalizeControlPin } from "./controlPin.js";
 
 const RANGE_CONFIG = {
   "1H": { points: 13, step: 5 },
@@ -263,12 +263,21 @@ function SystemRail({ reading, online, demoEnabled }) {
   }, [reading?.timestamp]);
 
   async function toggle(target) {
-    const nextValue = !controls[target];
     setPending(target);
     setError("");
     try {
-      if (!demoEnabled) await sendControlCommand(target, nextValue);
-      setControls((current) => ({ ...current, [target]: nextValue }));
+      const commands = controlCommands(controls, target);
+      if (demoEnabled) {
+        setControls((current) => ({ ...current, auto: target === "auto" ? commands.at(-1).value : false, [target]: commands.at(-1).value }));
+      } else {
+        let result;
+        for (const command of commands) result = await sendControlCommand(command.target, command.value);
+        setControls({
+          auto: result.mode !== "MANUAL",
+          pump: Boolean(result.pump),
+          relay4: Boolean(result.relay4),
+        });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Control command failed");
     } finally {

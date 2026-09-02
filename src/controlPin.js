@@ -4,3 +4,10 @@ export function normalizeControlPin(value) {
   if (labeled) return labeled[1];
   return /\s/.test(text) ? "" : text;
 }
+
+export function controlCommands(controls, target) {
+  const command = { target, value: !controls[target] };
+  return target !== "auto" && controls.auto
+    ? [{ target: "auto", value: false }, command]
+    : [command];
+}
